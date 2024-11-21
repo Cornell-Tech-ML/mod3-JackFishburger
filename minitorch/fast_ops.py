@@ -372,19 +372,22 @@ def _tensor_matrix_multiply(
         None : Fills in `out`
 
     """
-    a_batch_stride, b_batch_stride = (a_strides[0] if a_shape[0] > 1 else 0), (b_strides[0] if b_shape[0] > 1 else 0)
-    a_col_stride, a_row_stride = a_strides[1], a_strides[2]
-    b_col_stride, b_row_stride = b_strides[1], b_strides[2]
-    result_dim = b_shape[-2]
+    reduced_size = a_shape[2]
+    a_batch_s, b_batch_s = (a_strides[0] if a_shape[0] > 1 else 0), (b_strides[0] if b_shape[0] > 1 else 0)
+    a_row_s, a_col_s = a_strides[1], a_strides[2]
+    b_row_s, b_col_s = b_strides[1], b_strides[2]
 
-    for batch_index in prange(out_shape[0]):
-        for row in range(out_shape[1]):
-            for col in range(out_shape[2]):
-                a_index = batch_index * a_batch_stride + row * a_col_stride
-                b_index = batch_index * b_batch_stride + col * b_row_stride
-                out_index = batch_index * out_strides[0] + row * out_strides[1] + col * out_strides[2]
-                result = sum(a_storage[a_index + i * a_row_stride] * b_storage[b_index + i * b_col_stride] for i in range(result_dim))
-                out[out_index] = result
+    for batch in prange(out_shape[0]):
+        for i in range(out_shape[1]):
+            for j in range(out_shape[2]):
+                out_pos = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
+                total = 0.0
+                a_in, b_in = batch * a_batch_s + i * a_row_s, batch * b_batch_s + j * b_col_s
+
+                for k in range(reduced_size):
+                    total += a_storage[a_in + k * a_col_s] * b_storage[b_in + k * b_row_s]
+                
+                out[out_pos] = total
+
 
 tensor_matrix_multiply = njit(_tensor_matrix_multiply, parallel=True)
-assert tensor_matrix_multiply is not None
