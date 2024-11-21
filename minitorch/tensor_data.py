@@ -33,106 +33,53 @@ UserStrides: TypeAlias = Sequence[int]
 
 
 def index_to_position(index: Index, strides: Strides) -> int:
-    """Converts a multidimensional tensor `index` into a single-dimensional position in
-    storage based on strides.
-
-    Args:
-    ----
-        index : index tuple of ints
-        strides : tensor strides
-
-    Returns:
-    -------
-        Position in storage
-
-    """
-    # Initialize position to 0
-    stride_position = 0
-    
-    # Iterate through corresponding indices and strides simultaneously
-    for index, stride in zip(index, strides):
-        # For each dimension, multiply index by stride and add to position
-        # This converts multidimensional index to flat position using strides
-        stride_position += index * stride
-        
-    # Return the calculated flat position in storage
-    return stride_position
+    """Converts a multidimensional tensor `index` into a single-dimensional"""
+    position = 0
+    for ind, stride in zip(index, strides):
+        position += ind * stride
+    return position
 
 
 def to_index(ordinal: int, shape: Shape, out_index: OutIndex) -> None:
-    """Convert an `ordinal` to an index in the `shape`.
-    Should ensure that enumerating position 0 ... size of a
-    tensor produces every index exactly once. It
-    may not be the inverse of `index_to_position`.
-
-    Args:
-    ----
-        ordinal: ordinal position to convert
-        shape : tensor shape
-        out_index : return index corresponding to position
-
-    """
-    remaining_ordinal = 0 + ordinal
-    for d in range(len(shape) - 1, -1, -1):
-        dimension_size = shape[d]
-        out_index[d] = int(remaining_ordinal % dimension_size)
-        remaining_ordinal = remaining_ordinal // dimension_size
+    """Convert an `ordinal` to an index in the `shape`."""
+    cur_ord = ordinal + 0
+    for i in range(len(shape) - 1, -1, -1):
+        sh = shape[i]
+        out_index[i] = int(cur_ord % sh)
+        cur_ord = cur_ord // sh
 
 
 def broadcast_index(
     big_index: Index, big_shape: Shape, shape: Shape, out_index: OutIndex
 ) -> None:
-    """Convert a `big_index` into `big_shape` to a smaller `out_index`
-    into `shape` following broadcasting rules. In this case
-    it may be larger or with more dimensions than the `shape`
-    given. Additional dimensions may need to be mapped to 0 or
-    removed.
-
-    Args:
-    ----
-        big_index : multidimensional index of bigger tensor
-        big_shape : tensor shape of bigger tensor
-        shape : tensor shape of smaller tensor
-        out_index : multidimensional index of smaller tensor
-
-    Returns:
-    -------
-        None
-
-    """
-    diff = len(big_shape) - len(shape)
-    for i in range(len(shape) - 1, -1, -1):
-        out_index[i] = big_index[i + diff] if shape[i] > 1 else 0
+    """Convert a `big_index` in `big_shape` to a smaller `out_index` in `shape` following broadcasting rules."""
+    for i, s in enumerate(shape):
+        if s > 1:
+            out_index[i] = big_index[i + (len(big_shape) - len(shape))]
+        else:
+            out_index[i] = 0
+    return None
 
 
-def shape_broadcast(shape1: UserShape, shape2: UserShape) -> UserShape:
-    """Broadcast two shapes to create a new union shape.
-
-    Args:
-    ----
-        shape1 : first shape
-        shape2 : second shape
-
-    Returns:
-    -------
-        broadcasted shape
-
-    Raises:
-    ------
-        IndexingError : if cannot broadcast
-
-    """
-    max_len = max(len(shape1), len(shape2))
-    shape1 = [1] * (max_len - len(shape1)) + list(shape1)
-    shape2 = [1] * (max_len - len(shape2)) + list(shape2)
-
-    broadcasted_shape = [
-        dim1 if dim1 == dim2 or dim2 == 1 else dim2 if dim1 == 1 else
-        (_ for _ in ()).throw(IndexingError(f"Cannot broadcast shapes {shape1} and {shape2}"))
-        for dim1, dim2 in zip(shape1, shape2)
-    ]
-
-    return tuple(broadcasted_shape)
+def shape_broadcast(shapel: UserShape, shape2: UserShape) -> UserShape:
+    """Broadcast two shapes to create a new union shape."""
+    a, b = shapel, shape2
+    n = max(len(a), len(b))
+    c_rev = [0] * n
+    a_rev = list(reversed(a))
+    b_rev = list(reversed(b))
+    for i in range(n):
+        if i >= len(a):
+            c_rev[i] = b_rev[i]
+        elif i >= len(b):
+            c_rev[i] = a_rev[i]
+        else:
+            c_rev[i] = max(a_rev[i], b_rev[i])
+            if a_rev[i] != c_rev[i] and a_rev[i] != 1:
+                raise IndexingError(f"Broadcast failure {a} {b}")
+            if b_rev[i] != c_rev[i] and b_rev[i] != 1:
+                raise IndexingError(f"Broadcast failure {a} {b}")
+    return tuple(reversed(c_rev))
 
 
 def strides_from_shape(shape: UserShape) -> UserStrides:
@@ -313,21 +260,11 @@ class TensorData:
             range(len(self.shape))
         ), f"Must give a position to each dimension. Shape: {self.shape} Order: {order}"
 
-        # Declare two new lists to store the new shape and strides
-        new_shape = []
-        new_strides = []
-
-        # Create new shape and strides based on the given order
-        for i in order:
-            new_shape.append(self.shape[i])
-            new_strides.append(self._strides[i])
-
-        # Convert the lists to tuples
-        new_shape = tuple(new_shape)
-        new_strides = tuple(new_strides)
-
-        # Return a new TensorData object with permuted dimensions
-        return TensorData(self._storage, new_shape, new_strides)
+        return TensorData(
+        self._storage,
+        tuple([self.shape[o] for o in order]),
+        tuple([self.strides[o] for o in order]),
+    )
 
     def to_string(self) -> str:
         """Convert to string"""

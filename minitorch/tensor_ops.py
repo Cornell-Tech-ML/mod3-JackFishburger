@@ -8,6 +8,7 @@ from typing_extensions import Protocol
 from . import operators
 from .tensor_data import (
     MAX_DIMS,
+    Index,
     broadcast_index,
     index_to_position,
     shape_broadcast,
@@ -216,31 +217,7 @@ class SimpleOps(TensorOps):
 def tensor_map(
     fn: Callable[[float], float],
 ) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides], None]:
-    """Low-level implementation of tensor map between
-    tensors with *possibly different strides*.
-
-    Simple version:
-
-    * Fill in the `out` array by applying `fn` to each
-      value of `in_storage` assuming `out_shape` and `in_shape`
-      are the same size.
-
-    Broadcasted version:
-
-    * Fill in the `out` array by applying `fn` to each
-      value of `in_storage` assuming `out_shape` and `in_shape`
-      broadcast. (`in_shape` must be smaller than `out_shape`).
-
-    Args:
-    ----
-        fn: function from float-to-float to apply
-
-    Returns:
-    -------
-        Tensor map function.
-
-    """
-
+    """Low-level implementation of tensor map between tensors with *possibly different strides*."""
     def _map(
         out: Storage,
         out_shape: Shape,
@@ -249,11 +226,16 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        out_index, in_index = np.zeros(MAX_DIMS, dtype=np.int32), np.zeros(MAX_DIMS, dtype=np.int32)
-        for out_pos in range(len(out)):
-            to_index(out_pos, out_shape, out_index)
+        # ASSIGN2.2
+        out_index: Index = np.zeros(MAX_DIMS, np.int16)
+        in_index: Index = np.zeros(MAX_DIMS, np.int16)
+        for i in range(len(out)):
+            to_index(i, out_shape, out_index)
             broadcast_index(out_index, out_shape, in_shape, in_index)
-            out[out_pos] = fn(in_storage[index_to_position(in_index, in_strides)])
+            o = index_to_position(out_index, out_strides)
+            j = index_to_position(in_index, in_strides)
+            out[o] = fn(in_storage[j])
+        # END ASSIGN2.2
 
     return _map
 
@@ -276,16 +258,19 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        out_index, a_index, b_index = (np.zeros(MAX_DIMS, dtype=np.int32) for _ in range(3))
-
-        for out_pos in range(len(out)):
-            to_index(out_pos, out_shape, out_index)
+    # ASSIGN2.2
+        out_index: Index = np.zeros(MAX_DIMS, np.int32)
+        a_index: Index = np.zeros(MAX_DIMS, np.int32)
+        b_index: Index = np.zeros(MAX_DIMS, np.int32)
+        for i in range(len(out)):
+            to_index(i, out_shape, out_index)
+            o = index_to_position(out_index, out_strides)
             broadcast_index(out_index, out_shape, a_shape, a_index)
+            j = index_to_position(a_index, a_strides)
             broadcast_index(out_index, out_shape, b_shape, b_index)
-            out[out_pos] = fn(
-                a_storage[index_to_position(a_index, a_strides)],
-                b_storage[index_to_position(b_index, b_strides)]
-            )
+            k = index_to_position(b_index, b_strides)
+            out[o] = fn(a_storage[j], b_storage[k])
+    # END ASSIGN2.2
 
     return _zip
 
@@ -293,21 +278,7 @@ def tensor_zip(
 def tensor_reduce(
     fn: Callable[[float, float], float],
 ) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides, int], None]:
-    """Low-level implementation of tensor reduce.
-
-    * `out_shape` will be the same as `a_shape`
-       except with `reduce_dim` turned to size `1`
-
-    Args:
-    ----
-        fn: reduction function mapping two floats to float
-
-    Returns:
-    -------
-        Tensor reduce function.
-
-    """
-
+    """Low-level implementation of tensor reduce."""
     def _reduce(
         out: Storage,
         out_shape: Shape,
@@ -317,21 +288,17 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        out_index = np.zeros(MAX_DIMS, np.int32)
-        a_index = np.zeros(MAX_DIMS, np.int32)
+        # ASSIGN2.2
+        out_index: Index = np.zeros(MAX_DIMS, np.int32)
         reduce_size = a_shape[reduce_dim]
-
-        for out_pos in range(len(out)):
-            to_index(out_pos, out_shape, out_index)
-            a_index[:] = out_index[:]
-            a_index[reduce_dim] = 0
-            a_pos = index_to_position(a_index, a_strides)
-            out[out_pos] = a_storage[a_pos]
-
-            for i in range(1, reduce_size):
-                a_index[reduce_dim] = i
-                a_pos = index_to_position(a_index, a_strides)
-                out[out_pos] = fn(out[out_pos], a_storage[a_pos])
+        for i in range(len(out)):
+            to_index(i, out_shape, out_index)
+            o = index_to_position(out_index, out_strides)
+            for s in range(reduce_size):
+                out_index[reduce_dim] = s
+                j = index_to_position(out_index, a_strides)
+                out[o] = fn(out[o], a_storage[j])
+        # END ASSIGN2.2
 
     return _reduce
 
