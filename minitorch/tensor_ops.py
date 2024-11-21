@@ -7,6 +7,7 @@ from typing_extensions import Protocol
 
 from . import operators
 from .tensor_data import (
+    MAX_DIMS,
     broadcast_index,
     index_to_position,
     shape_broadcast,
@@ -60,7 +61,6 @@ class TensorBackend:
         Args:
         ----
             ops : tensor operations object see `tensor_ops.py`
-
 
         Returns:
         -------
@@ -249,12 +249,11 @@ def tensor_map(
         in_shape: Shape,
         in_strides: Strides,
     ) -> None:
-        out_index = np.zeros(len(out_shape), dtype=np.int32)
-        in_index = np.zeros(len(in_shape), dtype=np.int32)
-        for i in range(len(out)):
-            to_index(i, out_shape, out_index)
+        out_index, in_index = np.zeros(MAX_DIMS, dtype=np.int32), np.zeros(MAX_DIMS, dtype=np.int32)
+        for out_pos in range(len(out)):
+            to_index(out_pos, out_shape, out_index)
             broadcast_index(out_index, out_shape, in_shape, in_index)
-            out[i] = fn(in_storage[index_to_position(in_index, in_strides)])
+            out[out_pos] = fn(in_storage[index_to_position(in_index, in_strides)])
 
     return _map
 
@@ -264,30 +263,7 @@ def tensor_zip(
 ) -> Callable[
     [Storage, Shape, Strides, Storage, Shape, Strides, Storage, Shape, Strides], None
 ]:
-    """Low-level implementation of tensor zip between
-    tensors with *possibly different strides*.
-
-    Simple version:
-
-    * Fill in the `out` array by applying `fn` to each
-      value of `a_storage` and `b_storage` assuming `out_shape`
-      and `a_shape` are the same size.
-
-    Broadcasted version:
-
-    * Fill in the `out` array by applying `fn` to each
-      value of `a_storage` and `b_storage` assuming `a_shape`
-      and `b_shape` broadcast to `out_shape`.
-
-    Args:
-    ----
-        fn: function mapping two floats to float to apply
-
-    Returns:
-    -------
-        Tensor zip function.
-
-    """
+    """Low-level implementation of tensor zip between tensors with *possibly different strides*."""
 
     def _zip(
         out: Storage,
@@ -300,16 +276,15 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-        out_index = np.zeros(len(out_shape), dtype=np.int32)
-        a_index = np.zeros(len(a_shape), dtype=np.int32)
-        b_index = np.zeros(len(b_shape), dtype=np.int32)
-        for i in range(len(out)):
-            to_index(i, out_shape, out_index)
+        out_index, a_index, b_index = (np.zeros(MAX_DIMS, dtype=np.int32) for _ in range(3))
+
+        for out_pos in range(len(out)):
+            to_index(out_pos, out_shape, out_index)
             broadcast_index(out_index, out_shape, a_shape, a_index)
             broadcast_index(out_index, out_shape, b_shape, b_index)
-            out[i] = fn(
+            out[out_pos] = fn(
                 a_storage[index_to_position(a_index, a_strides)],
-                b_storage[index_to_position(b_index, b_strides)],
+                b_storage[index_to_position(b_index, b_strides)]
             )
 
     return _zip
@@ -342,15 +317,21 @@ def tensor_reduce(
         a_strides: Strides,
         reduce_dim: int,
     ) -> None:
-        out_index = np.zeros(len(out_shape), dtype=np.int32)
-        for i in range(len(out)):
-            to_index(i, out_shape, out_index)
-            acc = out[i]
-            for j in range(a_shape[reduce_dim]):
-                a_index = out_index.copy()
-                a_index[reduce_dim] = j
-                acc = fn(acc, a_storage[index_to_position(a_index, a_strides)])
-            out[i] = acc
+        out_index = np.zeros(MAX_DIMS, np.int32)
+        a_index = np.zeros(MAX_DIMS, np.int32)
+        reduce_size = a_shape[reduce_dim]
+
+        for out_pos in range(len(out)):
+            to_index(out_pos, out_shape, out_index)
+            a_index[:] = out_index[:]
+            a_index[reduce_dim] = 0
+            a_pos = index_to_position(a_index, a_strides)
+            out[out_pos] = a_storage[a_pos]
+
+            for i in range(1, reduce_size):
+                a_index[reduce_dim] = i
+                a_pos = index_to_position(a_index, a_strides)
+                out[out_pos] = fn(out[out_pos], a_storage[a_pos])
 
     return _reduce
 
