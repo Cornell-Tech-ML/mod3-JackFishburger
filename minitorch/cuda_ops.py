@@ -317,45 +317,47 @@ def tensor_reduce(
         out: Storage,
         out_shape: Shape,
         out_strides: Strides,
+        out_size: int,
         a_storage: Storage,
         a_shape: Shape,
         a_strides: Strides,
         reduce_dim: int,
+        reduce_value: float,
     ) -> None:
         BLOCK_DIM = 1024
+
         cache = cuda.shared.array(BLOCK_DIM, numba.float64)
         out_index = cuda.local.array(MAX_DIMS, numba.int32)
+        out_pos = cuda.blockIdx.x
         pos = cuda.threadIdx.x
-        grid_stride = cuda.gridDim.x * BLOCK_DIM
 
-        # Initialize cache
-        for i in range(pos, a_shape[reduce_dim], grid_stride):
-            index = cuda.local.array(MAX_DIMS, numba.int32)
-            to_index(i, a_shape, index)
-            a_pos = index_to_position(index, a_strides)
-            cache[pos] = a_storage[a_pos]
-            cuda.syncthreads()
+        # Task 3.3.
+        cache[pos] = reduce_value
 
-            # Perform reduction
-            stride = 1
-            while stride < BLOCK_DIM:
-                if pos % (2 * stride) == 0 and pos + stride < BLOCK_DIM:
-                    cache[pos] = fn(cache[pos], cache[pos + stride])
-                stride *= 2
+        if out_pos < out_size:
+            to_index(out_pos, out_shape, out_index)
+            o = index_to_position(out_index, out_strides)
+            out_index[reduce_dim] = out_index[reduce_dim] * BLOCK_DIM + pos
+
+            if out_index[reduce_dim] < a_shape[reduce_dim]:
+                cache[pos] = a_storage[index_to_position(out_index, a_strides)]
                 cuda.syncthreads()
 
-            # Write result to global memory
+                j = 1
+                while j < BLOCK_DIM:
+                    if pos % (j * 2) == 0:
+                        cache[pos] = fn(cache[pos], cache[pos + j])
+                    cuda.syncthreads()
+                    j *= 2
+
             if pos == 0:
-                to_index(i // BLOCK_DIM, out_shape, out_index)
-                out_pos = index_to_position(out_index, out_strides)
-                out[out_pos] = cache[0]
+                out[o] = cache[0]
 
     return cuda.jit(_reduce)  # type: ignore
 
 
 def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
-    """This is a practice square MM kernel to prepare for matmul.
-
+    """Thiis is a practice square MM kernel to prepare for matmul.
     Given a storage `out` and two storage `a` and `b`. Where we know
     both are shape [size, size] with strides [size, 1].
 
