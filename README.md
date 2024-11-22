@@ -408,6 +408,41 @@ Allocation hoisting:
 No allocation hoisting found
 None
 
+Task 3.4:
+Command:
+!cd $DIR; python timing.py
+
+Output:
+{'fast': 0.0035114288330078125, 'gpu': 0.006440798441569011}
+Running size 128
+{'fast': 0.016477584838867188, 'gpu': 0.014967918395996094}
+Running size 256
+{'fast': 0.09692056973775227, 'gpu': 0.05311258633931478}
+Running size 512
+{'fast': 1.2479018370310466, 'gpu': 0.29705055554707843}
+Running size 1024
+{'fast': 7.824625730514526, 'gpu': 0.9703116416931152}
+
+Timing summary
+Size: 64
+    fast: 0.00351
+    gpu: 0.00644
+Size: 128
+    fast: 0.01648
+    gpu: 0.01497
+Size: 256
+    fast: 0.09692
+    gpu: 0.05311
+Size: 512
+    fast: 1.24790
+    gpu: 0.29705
+Size: 1024
+    fast: 7.82463
+    gpu: 0.97031
+
+Graph:
+
+
 Task 3.5:
 CPU
 Simple:
