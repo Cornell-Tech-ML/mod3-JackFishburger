@@ -9,7 +9,8 @@ All the files which will be moved are specified in files_to_sync.txt as newline 
 Usage: python sync_previous_module.py <source_dir_name> <dest_dir_name>
 
 Ex:  python sync_previous_module.py mle-module-0-sauravpanda24 mle-module-1-sauravpanda24
-"""
+"""  # noqa: D212
+
 import os
 import shutil
 import sys
@@ -38,13 +39,13 @@ dest = sys.argv[2]
 # copy the files from source to destination
 try:
     for file in files_to_move:
-        print(f"Moving file : ", file)
+        print(f"Moving file : ", file)  # noqa: F541
         shutil.copy(
             os.path.join(grandparent_path, source, file),
             os.path.join(grandparent_path, dest, file),
         )
     print(f"Finished moving {len(files_to_move)} files")
-except Exception as e:
+except Exception as e:  # noqa: F841
     print(
         "Something went wrong! please check if the source and destination folders are present in same folder"
     )
