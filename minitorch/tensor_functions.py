@@ -465,7 +465,7 @@ Gradient check error for function %s.
 
 Input %s
 
-Received derivative %f for argument %d and index %s,
+Received derivative %f for argument %d and index %s,,
 but was expecting derivative %f from central difference.
 
 """
