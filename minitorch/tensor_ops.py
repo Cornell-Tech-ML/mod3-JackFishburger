@@ -218,6 +218,7 @@ def tensor_map(
     fn: Callable[[float], float],
 ) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides], None]:
     """Low-level implementation of tensor map between tensors with *possibly different strides*."""
+
     def _map(
         out: Storage,
         out_shape: Shape,
@@ -258,7 +259,7 @@ def tensor_zip(
         b_shape: Shape,
         b_strides: Strides,
     ) -> None:
-    # ASSIGN2.2
+        # ASSIGN2.2
         out_index: Index = np.zeros(MAX_DIMS, np.int32)
         a_index: Index = np.zeros(MAX_DIMS, np.int32)
         b_index: Index = np.zeros(MAX_DIMS, np.int32)
@@ -270,6 +271,7 @@ def tensor_zip(
             broadcast_index(out_index, out_shape, b_shape, b_index)
             k = index_to_position(b_index, b_strides)
             out[o] = fn(a_storage[j], b_storage[k])
+
     # END ASSIGN2.2
 
     return _zip
@@ -279,6 +281,7 @@ def tensor_reduce(
     fn: Callable[[float, float], float],
 ) -> Callable[[Storage, Shape, Strides, Storage, Shape, Strides, int], None]:
     """Low-level implementation of tensor reduce."""
+
     def _reduce(
         out: Storage,
         out_shape: Shape,

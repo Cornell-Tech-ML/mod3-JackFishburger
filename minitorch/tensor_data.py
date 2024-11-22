@@ -261,10 +261,10 @@ class TensorData:
         ), f"Must give a position to each dimension. Shape: {self.shape} Order: {order}"
 
         return TensorData(
-        self._storage,
-        tuple([self.shape[o] for o in order]),
-        tuple([self.strides[o] for o in order]),
-    )
+            self._storage,
+            tuple([self.shape[o] for o in order]),
+            tuple([self.strides[o] for o in order]),
+        )
 
     def to_string(self) -> str:
         """Convert to string"""

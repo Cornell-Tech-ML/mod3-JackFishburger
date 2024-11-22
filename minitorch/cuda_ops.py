@@ -284,6 +284,7 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
     if pos == 0:
         out[cuda.blockIdx.x] = cache[0]
 
+
 jit_sum_practice = cuda.jit()(_sum_practice)
 
 
@@ -424,6 +425,7 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
         # Store the accumulated result in the output matrix
         out[ty * size + tx] = temp
 
+
 # Compile the _mm_practice function into a CUDA kernel
 jit_mm_practice = cuda.jit(_mm_practice)
 
@@ -443,16 +445,16 @@ def mm_practice(a: Tensor, b: Tensor) -> TensorData:
 
 # Define a CUDA kernel function for tensor matrix multiplication
 def _tensor_matrix_multiply(
-    out: Storage,            # Output storage for the result
-    out_shape: Shape,        # Shape of the output tensor
-    out_strides: Strides,    # Strides for the output tensor
-    out_size: int,           # Total size of the output tensor
-    a_storage: Storage,      # Storage for tensor 'a'
-    a_shape: Shape,          # Shape of tensor 'a'
-    a_strides: Strides,      # Strides for tensor 'a'
-    b_storage: Storage,      # Storage for tensor 'b'
-    b_shape: Shape,          # Shape of tensor 'b'
-    b_strides: Strides       # Strides for tensor 'b'
+    out: Storage,  # Output storage for the result
+    out_shape: Shape,  # Shape of the output tensor
+    out_strides: Strides,  # Strides for the output tensor
+    out_size: int,  # Total size of the output tensor
+    a_storage: Storage,  # Storage for tensor 'a'
+    a_shape: Shape,  # Shape of tensor 'a'
+    a_strides: Strides,  # Strides for tensor 'a'
+    b_storage: Storage,  # Storage for tensor 'b'
+    b_shape: Shape,  # Shape of tensor 'b'
+    b_strides: Strides,  # Strides for tensor 'b'
 ) -> None:
     """CUDA tensor matrix multiply function.
 
@@ -501,13 +503,21 @@ def _tensor_matrix_multiply(
     for phase in range((a_shape[-1] + BLOCK_DIM - 1) // BLOCK_DIM):
         # Load a tile of matrix 'a' into shared memory
         if i < a_shape[-2] and (phase * BLOCK_DIM + pj) < a_shape[-1]:
-            a_shared[pi, pj] = a_storage[batch * a_batch_stride + i * a_strides[1] + (phase * BLOCK_DIM + pj) * a_strides[2]]
+            a_shared[pi, pj] = a_storage[
+                batch * a_batch_stride
+                + i * a_strides[1]
+                + (phase * BLOCK_DIM + pj) * a_strides[2]
+            ]
         else:
             a_shared[pi, pj] = 0.0
 
         # Load a tile of matrix 'b' into shared memory
         if j < b_shape[-1] and (phase * BLOCK_DIM + pi) < b_shape[-2]:
-            b_shared[pi, pj] = b_storage[batch * b_batch_stride + (phase * BLOCK_DIM + pi) * b_strides[1] + j * b_strides[2]]
+            b_shared[pi, pj] = b_storage[
+                batch * b_batch_stride
+                + (phase * BLOCK_DIM + pi) * b_strides[1]
+                + j * b_strides[2]
+            ]
         else:
             b_shared[pi, pj] = 0.0
 
@@ -523,5 +533,6 @@ def _tensor_matrix_multiply(
     # Write the result to global memory
     if i < out_shape[-2] and j < out_shape[-1]:
         out[batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]] = temp
+
 
 tensor_matrix_multiply = jit(_tensor_matrix_multiply)

@@ -170,7 +170,9 @@ def tensor_map(
         in_strides: Strides,
     ) -> None:
         # Check if the output and input shapes and strides are identical
-        if np.array_equal(out_shape, in_shape) and np.array_equal(out_strides, in_strides):
+        if np.array_equal(out_shape, in_shape) and np.array_equal(
+            out_strides, in_strides
+        ):
             # Directly apply the function to each element if they are identical
             for i in prange(len(out)):
                 out[i] = fn(in_storage[i])
@@ -199,6 +201,7 @@ def tensor_map(
             out[out_pos] = fn(in_storage[in_pos])
 
     return njit(_map, parallel=True)  # type: ignore
+
 
 def tensor_zip(
     fn: Callable[[float, float], float],
@@ -308,22 +311,22 @@ def tensor_reduce(
     ) -> None:
         total_elements = np.prod(out_shape)
         dim_size = a_shape[reduce_dim]
-        
+
         for element_index in prange(total_elements):
             current_index = np.zeros(MAX_DIMS, np.int32)
             to_index(element_index, out_shape, current_index)
-            
+
             output_position = index_to_position(current_index, out_strides)
             current_index[reduce_dim] = 0
             input_position = index_to_position(current_index, a_strides)
-            
+
             result = a_storage[input_position]
-            
+
             for dim_index in range(1, dim_size):
                 current_index[reduce_dim] = dim_index
                 input_position = index_to_position(current_index, a_strides)
                 result = fn(result, a_storage[input_position])
-                
+
             out[output_position] = result
 
     return njit(_reduce, parallel=True)  # type: ignore
@@ -373,20 +376,30 @@ def _tensor_matrix_multiply(
 
     """
     reduced_size = a_shape[2]
-    a_batch_s, b_batch_s = (a_strides[0] if a_shape[0] > 1 else 0), (b_strides[0] if b_shape[0] > 1 else 0)
+    a_batch_s, b_batch_s = (
+        (a_strides[0] if a_shape[0] > 1 else 0),
+        (b_strides[0] if b_shape[0] > 1 else 0),
+    )
     a_row_s, a_col_s = a_strides[1], a_strides[2]
     b_row_s, b_col_s = b_strides[1], b_strides[2]
 
     for batch in prange(out_shape[0]):
         for i in range(out_shape[1]):
             for j in range(out_shape[2]):
-                out_pos = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
+                out_pos = (
+                    batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
+                )
                 total = 0.0
-                a_in, b_in = batch * a_batch_s + i * a_row_s, batch * b_batch_s + j * b_col_s
+                a_in, b_in = (
+                    batch * a_batch_s + i * a_row_s,
+                    batch * b_batch_s + j * b_col_s,
+                )
 
                 for k in range(reduced_size):
-                    total += a_storage[a_in + k * a_col_s] * b_storage[b_in + k * b_row_s]
-                
+                    total += (
+                        a_storage[a_in + k * a_col_s] * b_storage[b_in + k * b_row_s]
+                    )
+
                 out[out_pos] = total
 
 

@@ -192,6 +192,7 @@ class Tensor:
 
     def zeros(self, shape: Optional[UserShape] = None) -> Tensor:
         """Create a tensor of zeros with the given shape."""
+
         def zero(shape: UserShape) -> Tensor:
             return Tensor.make(
                 [0.0] * int(operators.prod(shape)), shape, backend=self.backend

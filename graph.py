@@ -1,4 +1,4 @@
-import matplotlib.pyplot as plt
+"""import matplotlib.pyplot as plt
 
 # Data
 sizes = [64, 128, 256, 512, 1024]
@@ -19,3 +19,4 @@ plt.ylim(0, 10)  # Limit y-axis from 0 to 10
 plt.grid(True, which="both", linestyle="--", linewidth=0.75)
 plt.legend()
 plt.show()
+"""

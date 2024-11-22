@@ -72,7 +72,9 @@ def max(num_1: float, num_2: float) -> float:
 
 def is_close(num_1: float, num_2: float) -> bool:
     """Checks if two float numbers are close in value."""
-    return (num_1 - num_2 < 1e-2) and (num_2 - num_1 < 1e-2)  # 1e-2 is the tolerance for close numbers ($f(x) = |x - y| < 1e-2$)
+    return (num_1 - num_2 < 1e-2) and (
+        num_2 - num_1 < 1e-2
+    )  # 1e-2 is the tolerance for close numbers ($f(x) = |x - y| < 1e-2$)
 
 
 def sigmoid(num: float) -> float:
