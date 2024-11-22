@@ -1,4 +1,4 @@
-import random
+"""import random
 from collections import defaultdict
 import minitorch
 import time
@@ -55,3 +55,4 @@ if __name__ == "__main__":
         print(f"Size: {size}")
         for b, t in stimes.items():
             print(f"    {b}: {t:.5f}")
+"""
