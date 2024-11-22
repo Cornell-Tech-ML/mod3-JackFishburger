@@ -29,11 +29,13 @@ FakeCUDAKernel = Any
 Fn = TypeVar("Fn")
 
 
-def device_jit(fn: Fn, **kwargs) -> Fn:
+def device_jit(fn: Fn, **kwargs: Any) -> Fn:
+    """JIT compile a function for device execution."""
     return _jit(device=True, **kwargs)(fn)  # type: ignore
 
 
-def jit(fn, **kwargs) -> FakeCUDAKernel:
+def jit(fn: Fn, **kwargs: Any) -> FakeCUDAKernel:
+    """JIT compile a function for CUDA execution."""
     return _jit(**kwargs)(fn)  # type: ignore
 
 
@@ -386,31 +388,43 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
         size (int): size of the square
 
     """
+    # Define the block dimension for shared memory arrays
     BLOCK_DIM = 32
+    # Allocate shared memory for matrix 'a' with dimensions BLOCK_DIM x BLOCK_DIM
     a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    # Allocate shared memory for matrix 'b' with dimensions BLOCK_DIM x BLOCK_DIM
     b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
+    # Get the thread's x-coordinate within the block
     tx = cuda.threadIdx.x
+    # Get the thread's y-coordinate within the block
     ty = cuda.threadIdx.y
 
-    # Load data into shared memory
+    # Load data into shared memory if the thread coordinates are within the matrix size
     if tx < size and ty < size:
+        # Load element from matrix 'a' into shared memory
         a_shared[ty, tx] = a[ty * size + tx]
+        # Load element from matrix 'b' into shared memory
         b_shared[ty, tx] = b[ty * size + tx]
+    # Synchronize threads to ensure all data is loaded into shared memory
     cuda.syncthreads()
 
-    # Initialize the output value
+    # Initialize a temporary variable to accumulate the result of the matrix multiplication
     temp = 0.0
 
-    # Perform the matrix multiplication
+    # Perform the matrix multiplication if the thread coordinates are within the matrix size
     if tx < size and ty < size:
+        # Iterate over the shared dimension of the matrices
         for k in range(size):
+            # Accumulate the product of corresponding elements from 'a' and 'b'
             temp += a_shared[ty, k] * b_shared[k, tx]
 
-    # Write the result to global memory
+    # Write the result to global memory if the thread coordinates are within the matrix size
     if tx < size and ty < size:
+        # Store the accumulated result in the output matrix
         out[ty * size + tx] = temp
 
+# Compile the _mm_practice function into a CUDA kernel
 jit_mm_practice = cuda.jit(_mm_practice)
 
 
@@ -427,17 +441,18 @@ def mm_practice(a: Tensor, b: Tensor) -> TensorData:
     return out
 
 
+# Define a CUDA kernel function for tensor matrix multiplication
 def _tensor_matrix_multiply(
-    out: Storage,
-    out_shape: Shape,
-    out_strides: Strides,
-    out_size: int,
-    a_storage: Storage,
-    a_shape: Shape,
-    a_strides: Strides,
-    b_storage: Storage,
-    b_shape: Shape,
-    b_strides: Strides,
+    out: Storage,            # Output storage for the result
+    out_shape: Shape,        # Shape of the output tensor
+    out_strides: Strides,    # Strides for the output tensor
+    out_size: int,           # Total size of the output tensor
+    a_storage: Storage,      # Storage for tensor 'a'
+    a_shape: Shape,          # Shape of tensor 'a'
+    a_strides: Strides,      # Strides for tensor 'a'
+    b_storage: Storage,      # Storage for tensor 'b'
+    b_shape: Shape,          # Shape of tensor 'b'
+    b_strides: Strides       # Strides for tensor 'b'
 ) -> None:
     """CUDA tensor matrix multiply function.
 
@@ -455,42 +470,51 @@ def _tensor_matrix_multiply(
     Returns:
         None : Fills in `out`
     """
+    # Determine the batch stride for tensor 'a'
     a_batch_stride = a_strides[0] if a_shape[0] > 1 else 0
+    # Determine the batch stride for tensor 'b'
     b_batch_stride = b_strides[0] if b_shape[0] > 1 else 0
-    # Batch dimension - fixed
+    # Get the current batch index from the block index
     batch = cuda.blockIdx.z
 
+    # Define the block dimension for shared memory
     BLOCK_DIM = 32
+    # Allocate shared memory for a block of matrix 'a'
     a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
+    # Allocate shared memory for a block of matrix 'b'
     b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
-    # The final position c[i, j]
+    # Calculate the global row index for the output matrix
     i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
+    # Calculate the global column index for the output matrix
     j = cuda.blockIdx.y * cuda.blockDim.y + cuda.threadIdx.y
 
-    # The local position in the block.
+    # Calculate the local row index within the block
     pi = cuda.threadIdx.x
+    # Calculate the local column index within the block
     pj = cuda.threadIdx.y
 
-    # Initialize the output value
+    # Initialize the temporary variable to accumulate the result
     temp = 0.0
 
-    # Loop over the tiles of the input in phases
+    # Loop over the tiles of the input matrices
     for phase in range((a_shape[-1] + BLOCK_DIM - 1) // BLOCK_DIM):
-        # Load data into shared memory
+        # Load a tile of matrix 'a' into shared memory
         if i < a_shape[-2] and (phase * BLOCK_DIM + pj) < a_shape[-1]:
             a_shared[pi, pj] = a_storage[batch * a_batch_stride + i * a_strides[1] + (phase * BLOCK_DIM + pj) * a_strides[2]]
         else:
             a_shared[pi, pj] = 0.0
 
+        # Load a tile of matrix 'b' into shared memory
         if j < b_shape[-1] and (phase * BLOCK_DIM + pi) < b_shape[-2]:
             b_shared[pi, pj] = b_storage[batch * b_batch_stride + (phase * BLOCK_DIM + pi) * b_strides[1] + j * b_strides[2]]
         else:
             b_shared[pi, pj] = 0.0
 
+        # Synchronize threads to ensure all data is loaded into shared memory
         cuda.syncthreads()
 
-        # Compute the dot product for position c[i, j]
+        # Compute the dot product for the current position
         for k in range(BLOCK_DIM):
             temp += a_shared[pi, k] * b_shared[k, pj]
 

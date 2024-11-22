@@ -441,6 +441,7 @@ Size: 1024
     gpu: 0.97031
 
 Graph:
+![mod3graph](mod3graph.png)
 
 
 Task 3.5:
